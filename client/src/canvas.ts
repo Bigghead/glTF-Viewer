@@ -46,6 +46,29 @@ dracoLoader.setDecoderPath("three/examples/jsm/libs/draco/");
 console.log(dracoLoader);
 gltfLoader.setDRACOLoader(dracoLoader);
 
+// you might ask if I need all these if checks
+// no, but typescript is annoying with this
+const loadGltf = () => {
+  if (!window.gltfObject) throw new Error("No Gltf Available or selected!");
+
+  const fileReader = new FileReader();
+  fileReader.onload = ({ target }) => {
+    if (target) {
+      const { result } = target;
+
+      if (result) {
+        gltfLoader.parse(
+          result,
+          "",
+          (model) => console.log(model),
+          (error) => console.error(error)
+        );
+      }
+    }
+  };
+  fileReader.readAsText(window.gltfObject);
+};
+
 /**
  * Sizes
  */
@@ -123,6 +146,7 @@ gltfInput?.addEventListener("change", ({ target }) => {
       const [file] = target.files;
       console.log(file);
       window.gltfObject = file;
+      loadGltf();
     }
   }
 });
