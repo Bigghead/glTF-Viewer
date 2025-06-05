@@ -6,10 +6,18 @@ import GUI from "lil-gui";
 
 declare global {
   interface Window {
-    gltfObject: File | null;
+    gltfObject: {
+      gltfFileMap: Map<string, File> | null; // this will store everything in our file drop
+      gltfRootFile: File | null;
+      gltfRootPath: string;
+    };
   }
 }
-window["gltfObject"] = null;
+window["gltfObject"] = {
+  gltfFileMap: null,
+  gltfRootFile: null,
+  gltfRootPath: "",
+};
 
 /**
  * Base
@@ -51,23 +59,57 @@ gltfLoader.setDRACOLoader(dracoLoader);
 const loadGltf = () => {
   if (!window.gltfObject) throw new Error("No Gltf Available or selected!");
 
+  const rootFile = window.gltfObject.gltfRootFile;
+
   const fileReader = new FileReader();
   fileReader.onload = ({ target }) => {
     if (target) {
       const { result } = target;
 
+      // this is the magic for the threejs gltfloader taking data from input file
+      // 1. Setting the Resource Path for the Loader
+      gltfLoader.setResourcePath(window.gltfObject.gltfRootPath);
+
+      // 2. Intercepting and Modifying URL Requests for Assets
+      gltfLoader.manager.setURLModifier((url: string) => {
+        const combinedPath = url;
+
+        const file = window.gltfObject.gltfFileMap?.get(combinedPath);
+
+        if (file) {
+          console.log(URL.createObjectURL(file));
+          return URL.createObjectURL(file);
+        }
+
+        console.warn(
+          `Resource "${url}" not found in provided file map. Attempting normal fetch.`
+        );
+        return url;
+      });
+      // --- End Core Fix ---
+
       if (result) {
+        // 3. then parsing the gltf file, but the gltf is relying on other files in the folder ( png, bin, etc )
+        //    this is why the "magic" fixes are needed
         gltfLoader.parse(
           result,
           "",
-          (model) => console.log(model),
+          (model) => {
+            console.log(model);
+          },
           (error) => console.error(error)
         );
       }
     }
   };
-  fileReader.readAsText(window.gltfObject);
+  fileReader.readAsText(rootFile);
 };
+
+/**
+ * Light / Alwasys forget this with some meshes that need
+ */
+const ambientLight = new three.AmbientLight("#ffffff", 3);
+scene.add(ambientLight);
 
 /**
  * Sizes
@@ -141,11 +183,30 @@ const gltfInput = document.querySelector("#gltf-input") as HTMLInputElement;
 gltfInput?.addEventListener("change", ({ target }) => {
   if (!target) return new Error("No files selected");
 
+  const fileObject = window.gltfObject;
+  fileObject.gltfFileMap = new Map<string, File>();
+
   if ("files" in target && target instanceof HTMLInputElement) {
     if (target.files) {
-      const [file] = target.files;
-      console.log(file);
-      window.gltfObject = file;
+      const { files } = target;
+
+      // files is a FileList type, not array
+      Array.from(files).forEach((file) => {
+        const filePath = file.webkitRelativePath;
+        fileObject.gltfFileMap?.set(filePath, file);
+
+        // if file is a glb or a gltf file type
+        if (file.name.match(/\.(gltf|glb)$/i)) {
+          fileObject.gltfRootFile = file;
+
+          // Extract the directory path (e.g., 'DuckFolder/')
+          fileObject.gltfRootPath = filePath.substring(
+            0,
+            filePath.lastIndexOf("/") + 1
+          );
+        }
+      });
+      console.log(window.gltfObject);
       loadGltf();
     }
   }
