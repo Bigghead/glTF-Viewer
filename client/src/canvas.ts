@@ -1,6 +1,6 @@
 import * as three from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import GUI from "lil-gui";
 
@@ -38,24 +38,33 @@ const textureLoader = new three.TextureLoader();
 const textureMap = {};
 /**
 
- * Test cube
+ * Floor
  */
-const cube: three.Mesh<three.BoxGeometry, three.MeshBasicMaterial> =
-  new three.Mesh(new three.BoxGeometry(1, 1, 1), new three.MeshBasicMaterial());
-scene.add(cube);
+const floor: three.Mesh<three.BoxGeometry, three.MeshBasicMaterial> =
+  new three.Mesh(
+    new three.BoxGeometry(10, 0.0001, 10),
+    new three.MeshBasicMaterial({
+      color: "grey",
+    })
+  );
+scene.add(floor);
 
 /**
  * GLTF
  */
+let loadedModel: GLTF | null = null;
 const gltfLoader = new GLTFLoader();
 
 const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath("three/examples/jsm/libs/draco/");
-console.log(dracoLoader);
 gltfLoader.setDRACOLoader(dracoLoader);
 
-// you might ask if I need all these if checks
-// no, but typescript is annoying with this
+/**
+ * Todo:
+ * 1) Remove previous loaded objects
+ * 2) ^ maybe add feature to add multiple models and position them from mouse drag
+ * 3) Take in other ( glb file ) model types - maybe should be priority
+ */
 const loadGltf = () => {
   if (!window.gltfObject) throw new Error("No Gltf Available or selected!");
 
@@ -77,7 +86,6 @@ const loadGltf = () => {
         const file = window.gltfObject.gltfFileMap?.get(combinedPath);
 
         if (file) {
-          console.log(URL.createObjectURL(file));
           return URL.createObjectURL(file);
         }
 
@@ -96,13 +104,15 @@ const loadGltf = () => {
           "",
           (model) => {
             console.log(model);
+            scene.add(model.scene);
+            loadedModel = model;
           },
           (error) => console.error(error)
         );
       }
     }
   };
-  fileReader.readAsText(rootFile);
+  fileReader.readAsText(rootFile as Blob);
 };
 
 /**
@@ -211,3 +221,23 @@ gltfInput?.addEventListener("change", ({ target }) => {
     }
   }
 });
+
+/**
+ *
+ */
+const guiObj = {
+  modelScale: 1,
+  changeModelScale: (loadedModel: GLTF | null, scale: number): void => {
+    if (loadedModel) {
+      const { scene } = loadedModel;
+      scene.scale.set(scale, scale, scale);
+    }
+  },
+};
+
+gui
+  .add(guiObj, "modelScale", 0.05, 5, 0.005)
+  .onFinishChange((scale: number) =>
+    guiObj.changeModelScale(loadedModel, scale)
+  )
+  .name("Change Model Scale");
