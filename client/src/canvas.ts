@@ -56,19 +56,21 @@ let loadedModel: GLTF | null = null;
 const gltfLoader = new GLTFLoader();
 
 const dracoLoader = new DRACOLoader();
-dracoLoader.setDecoderPath("three/examples/jsm/libs/draco/");
+dracoLoader.setDecoderPath("/draco/");
 gltfLoader.setDRACOLoader(dracoLoader);
 
 /**
  * Todo:
  * 1) Remove previous loaded objects
  * 2) ^ maybe add feature to add multiple models and position them from mouse drag
- * 3) Take in other ( glb file ) model types - maybe should be priority
  */
 const loadGltf = () => {
   if (!window.gltfObject) throw new Error("No Gltf Available or selected!");
 
   const rootFile = window.gltfObject.gltfRootFile;
+
+  // Todo, cover error cases if the rootfile doesn't exist
+  const isGlb = rootFile?.name.toLowerCase().includes("glb");
 
   const fileReader = new FileReader();
   fileReader.onload = ({ target }) => {
@@ -85,13 +87,22 @@ const loadGltf = () => {
 
         const file = window.gltfObject.gltfFileMap?.get(combinedPath);
 
+        console.log(file, url, window.gltfObject);
+
+        // extra test for the loader to fetch the public draco decoder / loader
+        // pathnames like "/draco/draco_wasm_wrapper.js" or /draco/draco_decoder.wasm won't be in the file ^
+        if (
+          url.includes("/draco/") ||
+          url.includes("draco_wasm_wrapper.js") ||
+          url.includes("draco_decoder.wasm")
+        ) {
+          return url;
+        }
+
         if (file) {
           return URL.createObjectURL(file);
         }
 
-        console.warn(
-          `Resource "${url}" not found in provided file map. Attempting normal fetch.`
-        );
         return url;
       });
       // --- End Core Fix ---
@@ -112,7 +123,13 @@ const loadGltf = () => {
       }
     }
   };
-  fileReader.readAsText(rootFile as Blob);
+
+  // Glb is array buffer, gltf is literally jsut json / text
+  if (isGlb) {
+    fileReader.readAsArrayBuffer(rootFile as Blob);
+  } else {
+    fileReader.readAsText(rootFile as Blob);
+  }
 };
 
 /**
