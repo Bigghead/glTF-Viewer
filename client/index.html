@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>glTF Viewer</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="gltf-input-container">
+      <label for="gltf-input">Choose a gltf model folder to load:</label>
+      <input
+        type="file"
+        id="gltf-input"
+        name="gltf-input"
+        accept=".gltf, .glb"
+        webkitdirectory
+        directory
+        multiple
+      />
+    </div>
+    <canvas class="webgl"></canvas>
+    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/canvas.ts"></script>
+  </body>
+</html>
