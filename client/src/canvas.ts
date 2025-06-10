@@ -4,6 +4,26 @@ import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import GUI from "lil-gui";
 
+class GUIManager {
+  gui = new GUI();
+  guiObj = {
+    modelScale: 1,
+  };
+  changeModelScale;
+
+  constructor(changeModelScale: (scale: number) => void) {
+    this.changeModelScale = changeModelScale;
+    this.initModelScale();
+  }
+
+  initModelScale = () => {
+    this.gui
+      .add(this.guiObj, "modelScale", 0.05, 5, 0.005)
+      .onFinishChange((scale: number) => this.changeModelScale(scale))
+      .name("Change Model Scale");
+  };
+}
+
 export class ModelCanvas {
   canvas: HTMLCanvasElement = document.querySelector(
     "canvas.webgl"
@@ -11,45 +31,32 @@ export class ModelCanvas {
   scene: three.Scene = new three.Scene();
   textureLoader: three.TextureLoader = new three.TextureLoader();
   textureMap: Record<string, three.Texture> = {};
-  loadedModel: GLTF | null = null;
-  gltfLoader = new GLTFLoader();
-
   ambientLight = new three.AmbientLight("#ffffff", 3);
-
   sizes = {
     width: window.innerWidth,
     height: window.innerHeight,
   };
-
   camera = new three.PerspectiveCamera(
     75,
     this.sizes.width / this.sizes.height,
     0.1,
     100
   );
-
   controls = new OrbitControls(this.camera, this.canvas);
-
   renderer = new three.WebGLRenderer({
     canvas: this.canvas,
   });
-
   clock = new three.Clock();
 
-  gui = new GUI();
-  guiObj = {
-    modelScale: 1,
-    changeModelScale: (loadedModel: GLTF | null, scale: number): void => {
-      if (loadedModel) {
-        const { scene } = loadedModel;
-        scene.scale.set(scale, scale, scale);
-      }
-    },
-  };
+  loadedModel: GLTF | null = null;
+  gltfLoader = new GLTFLoader();
+
+  guiManager: GUIManager;
 
   constructor() {
     this.init();
     this.initGui();
+    this.guiManager = new GUIManager(this.changeModelScale);
   }
 
   init() {
@@ -90,54 +97,49 @@ export class ModelCanvas {
     // this is the magic for the threejs gltfloader taking data from input file
     // 1. Setting the Resource Path for the Loader
 
-    try {
-      // 2. Intercepting and Modifying URL Requests for Assets
-      this.gltfLoader.manager.setURLModifier((url: string) => {
-        const combinedPath = url;
+    // 2. Intercepting and Modifying URL Requests for Assets
+    this.gltfLoader.manager.setURLModifier((url: string) => {
+      const combinedPath = url;
 
-        const file = window.gltfObject.gltfFileMap?.get(combinedPath);
+      const file = window.gltfObject.gltfFileMap?.get(combinedPath);
 
-        console.log(file, url, window.gltfObject);
+      console.log(file, url, window.gltfObject);
 
-        // extra test for the loader to fetch the public draco decoder / loader
-        // pathnames like "/draco/draco_wasm_wrapper.js" or /draco/draco_decoder.wasm won't be in the file ^
-        if (
-          url.includes("/draco/") ||
-          url.includes("draco_wasm_wrapper.js") ||
-          url.includes("draco_decoder.wasm")
-        ) {
-          return url;
-        }
-
-        if (file) {
-          return URL.createObjectURL(file);
-        }
-
+      // extra test for the loader to fetch the public draco decoder / loader
+      // pathnames like "/draco/draco_wasm_wrapper.js" or /draco/draco_decoder.wasm won't be in the file ^
+      if (
+        url.includes("/draco/") ||
+        url.includes("draco_wasm_wrapper.js") ||
+        url.includes("draco_decoder.wasm")
+      ) {
         return url;
-      });
-      // --- End Core Fix ---
-
-      if (result) {
-        // 3. then parsing the gltf file, but the gltf is relying on other files in the folder ( png, bin, etc )
-        //    this is why the "magic" fixes are needed
-        this.gltfLoader.parse(
-          result,
-          "",
-          (model) => {
-            console.log(model);
-            this.scene.add(model.scene);
-            this.loadedModel = model;
-          },
-          (error) => {
-            const errorMessage =
-              error instanceof ErrorEvent ? error.message : String(error);
-            throw new Error("Failed to load GLTF model: " + errorMessage);
-          }
-        );
       }
-    } catch (e) {
-      // Todo - handle this
-      console.error(e);
+
+      if (file) {
+        return URL.createObjectURL(file);
+      }
+
+      return url;
+    });
+    // --- End Core Fix ---
+
+    if (result) {
+      // 3. then parsing the gltf file, but the gltf is relying on other files in the folder ( png, bin, etc )
+      //    this is why the "magic" fixes are needed
+      this.gltfLoader.parse(
+        result,
+        "",
+        (model) => {
+          console.log(model);
+          this.scene.add(model.scene);
+          this.loadedModel = model;
+        },
+        (error) => {
+          const errorMessage =
+            error instanceof ErrorEvent ? error.message : String(error);
+          throw new Error("Failed to load GLTF model: " + errorMessage);
+        }
+      );
     }
   };
 
@@ -154,13 +156,13 @@ export class ModelCanvas {
     window.requestAnimationFrame(this.tick);
   };
 
-  initGui = (): void => {
-    this.gui
-      .add(this.guiObj, "modelScale", 0.05, 5, 0.005)
-      .onFinishChange((scale: number) =>
-        this.guiObj.changeModelScale(this.loadedModel, scale)
-      )
-      .name("Change Model Scale");
+  initGui = (): void => {};
+
+  changeModelScale = (scale: number): void => {
+    if (this.loadedModel) {
+      const { scene } = this.loadedModel;
+      scene.scale.set(scale, scale, scale);
+    }
   };
 
   resizeWindow = (): void => {
